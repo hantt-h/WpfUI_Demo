@@ -137,16 +137,17 @@ namespace WpfDateTimePicker.Controls
         public DateTimePicker()
         {
             InitializeComponent();
-            
+
             // 如果SelectedDateTime为null，设置为当前时间
             if (SelectedDateTime.HasValue)
             {
-                CurrentMonth = SelectedDateTime.Value;             
-               
+                CurrentMonth = SelectedDateTime.Value;
+
             }
             GenerateCalendar();
             InitializeTimeLists();
             InitializeInputValidation();
+            InitializePopupEvents();
 
         }
 
@@ -164,12 +165,6 @@ namespace WpfDateTimePicker.Controls
             for (int i = 0; i < 60; i++)
             {
                 MinuteListBox.Items.Add(i.ToString("D2"));
-            }
-
-            // 初始化秒列表 (00-59)
-            for (int i = 0; i < 60; i++)
-            {
-                SecondListBox.Items.Add(i.ToString("D2"));
             }
 
             // 设置当前选中项
@@ -198,15 +193,12 @@ namespace WpfDateTimePicker.Controls
                 tempDateTime = SelectedDateTime.Value;
                 HourListBox.SelectedIndex = tempDateTime.Hour;
                 MinuteListBox.SelectedIndex = tempDateTime.Minute;
-                SecondListBox.SelectedIndex = tempDateTime.Second;
 
                 // 滚动到选中项
                 if (HourListBox.SelectedItem != null)
                     HourListBox.ScrollIntoView(HourListBox.SelectedItem);
                 if (MinuteListBox.SelectedItem != null)
                     MinuteListBox.ScrollIntoView(MinuteListBox.SelectedItem);
-                if (SecondListBox.SelectedItem != null)
-                    SecondListBox.ScrollIntoView(SecondListBox.SelectedItem);
             }
             else
             {
@@ -214,13 +206,13 @@ namespace WpfDateTimePicker.Controls
                 tempDateTime = DateTime.Now;
                 HourListBox.SelectedIndex = tempDateTime.Hour;
                 MinuteListBox.SelectedIndex = tempDateTime.Minute;
-                SecondListBox.SelectedIndex = tempDateTime.Second;
             }
         }
 
         private void UpdatePropertiesFromSelectedDateTime()
         {
-            if (isUpdatingFromProperties) return;
+            if (isUpdatingFromProperties)
+                return;
 
             isUpdatingFromProperties = true;
             try
@@ -229,7 +221,7 @@ namespace WpfDateTimePicker.Controls
                 {
                     var dateTime = SelectedDateTime.Value;
                     SelectedDate = dateTime.Date;
-                    SelectedTime = new DateTime(1900, 1, 1).AddHours(dateTime.Hour).AddMinutes(dateTime.Minute).AddSeconds(dateTime.Second);
+                    SelectedTime = new DateTime(1900, 1, 1).AddHours(dateTime.Hour).AddMinutes(dateTime.Minute);
                 }
                 else
                 {
@@ -245,7 +237,8 @@ namespace WpfDateTimePicker.Controls
 
         private void UpdateSelectedDateTimeFromProperties()
         {
-            if (isUpdatingFromProperties) return;
+            if (isUpdatingFromProperties)
+                return;
 
             isUpdatingFromProperties = true;
             try
@@ -254,8 +247,8 @@ namespace WpfDateTimePicker.Controls
                 {
                     var date = SelectedDate.Value;
                     var time = SelectedTime.Value;
-                    SelectedDateTime = new DateTime(date.Year, date.Month, date.Day, 
-                        time.Hour, time.Minute, time.Second);
+                    SelectedDateTime = new DateTime(date.Year, date.Month, date.Day,
+                        time.Hour, time.Minute, 0);
                 }
                 else if (SelectedDate.HasValue)
                 {
@@ -266,8 +259,8 @@ namespace WpfDateTimePicker.Controls
                 {
                     var time = SelectedTime.Value;
                     var now = DateTime.Now;
-                    SelectedDateTime = new DateTime(now.Year, now.Month, now.Day, 
-                        time.Hour, time.Minute, time.Second);
+                    SelectedDateTime = new DateTime(now.Year, now.Month, now.Day,
+                        time.Hour, time.Minute, 0);
                 }
                 else
                 {
@@ -278,6 +271,106 @@ namespace WpfDateTimePicker.Controls
             {
                 isUpdatingFromProperties = false;
             }
+        }
+
+        #endregion
+
+        #region 弹框事件处理
+
+        private void InitializePopupEvents()
+        {
+            // 监听全局鼠标点击事件
+            this.Loaded += DateTimePicker_Loaded;
+            this.Unloaded += DateTimePicker_Unloaded;
+        }
+
+        private void DateTimePicker_Loaded(object sender, RoutedEventArgs e)
+        {
+            // 获取顶级窗口并添加鼠标事件监听
+            var window = Window.GetWindow(this);
+            if (window != null)
+            {
+                window.PreviewMouseLeftButtonDown += Window_PreviewMouseLeftButtonDown;
+            }
+        }
+
+        private void DateTimePicker_Unloaded(object sender, RoutedEventArgs e)
+        {
+            // 移除事件监听
+            var window = Window.GetWindow(this);
+            if (window != null)
+            {
+                window.PreviewMouseLeftButtonDown -= Window_PreviewMouseLeftButtonDown;
+            }
+        }
+
+        private void Window_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            // 如果弹框没有打开，不需要处理
+            if (!DateTimePopup.IsOpen && !TimePopup.IsOpen)
+                return;
+
+            try
+            {
+                // 检查点击位置是否在控件内部
+                var hitTest = this.InputHitTest(e.GetPosition(this));
+                if (hitTest != null)
+                {
+                    // 如果点击的是时间输入框，允许其获得焦点，但不关闭弹框
+                    if (hitTest == TimeInput || IsChildOf(TimeInput, hitTest as DependencyObject))
+                    {
+                        return; // 让时间输入框正常获得焦点
+                    }
+                    // 如果点击的是DisplayText，允许其获得焦点，但不关闭弹框
+                    if (hitTest == DisplayText || IsChildOf(DisplayText, hitTest as DependencyObject))
+                    {
+                        return; // 让DisplayText正常获得焦点
+                    }
+                    // 其他控件内部点击，不关闭弹框
+                    return;
+                }
+
+                // 检查点击位置是否在日期弹框内部
+                if (DateTimePopup.IsOpen && DateTimePopup.Child != null)
+                {
+                    var popupHitTest = DateTimePopup.Child.InputHitTest(e.GetPosition(DateTimePopup.Child));
+                    if (popupHitTest != null)
+                        return; // 点击在日期弹框内部，不关闭
+                }
+
+                // 检查点击位置是否在时间弹框内部
+                if (TimePopup.IsOpen && TimePopup.Child != null)
+                {
+                    var timePopupHitTest = TimePopup.Child.InputHitTest(e.GetPosition(TimePopup.Child));
+                    if (timePopupHitTest != null)
+                        return; // 点击在时间弹框内部，不关闭
+                }
+            }
+            catch
+            {
+                // 如果出现异常（比如坐标转换失败），不关闭弹框以保证安全
+                return;
+            }
+
+            // 点击在外部，关闭所有弹框
+            DateTimePopup.IsOpen = false;
+            TimePopup.IsOpen = false;
+        }
+
+        /// <summary>
+        /// 检查child是否是parent的子元素
+        /// </summary>
+        private bool IsChildOf(DependencyObject parent, DependencyObject child)
+        {
+            if (parent == null || child == null)
+                return false;
+
+            var current = child;
+            while (current != null && current != parent)
+            {
+                current = VisualTreeHelper.GetParent(current);
+            }
+            return current == parent;
         }
 
         #endregion
@@ -328,13 +421,14 @@ namespace WpfDateTimePicker.Controls
         {
             var picker = (DateTimePicker)d;
             var newValue = (DateTime?)e.NewValue;
-            
+
             if (newValue.HasValue)
             {
+
                 picker.CurrentMonth = newValue.Value.Date;
                 picker.GenerateCalendar();
             }
-            
+
             picker.UpdatePropertiesFromSelectedDateTime();
             picker.DateTimeChanged?.Invoke(picker, newValue);
         }
@@ -359,15 +453,40 @@ namespace WpfDateTimePicker.Controls
 
         #endregion
 
-        private void MainBorder_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        private void MainBorder_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
+            // 检查点击的是否是DisplayText或其子元素
+            //var hitTest = e.OriginalSource as DependencyObject;
+            //if (hitTest != null && (hitTest == DisplayText || IsChildOf(DisplayText, hitTest)))
+            //{
+            //    // 如果点击的是DisplayText，让其正常获得焦点，不打开弹框
+            //    // 关闭时间弹框（如果已打开）
+            //    TimePopup.IsOpen = false;
+            //    return; // 不阻止事件，让DisplayText正常获得焦点
+            //}
+
+            // 如果点击的是其他区域，则打开/关闭日期弹框
             // 关闭时间弹框，打开日期弹框
             TimePopup.IsOpen = false;
             DateTimePopup.IsOpen = !DateTimePopup.IsOpen;
+
+            // 阻止事件冒泡
+            // e.Handled = true;
         }
 
-        private void TimeInput_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        private void TimeInputBorder_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
+            // 检查点击的是否是TimeInput或其子元素
+            //var hitTest = e.OriginalSource as DependencyObject;
+            //if (hitTest != null && (hitTest == TimeInput || IsChildOf(TimeInput, hitTest)))
+            //{
+            //    // 如果点击的是TimeInput，让其正常获得焦点，不打开时间选择弹框
+            //    // 关闭时间弹框（如果已打开）
+            //    TimePopup.IsOpen = false;
+            //    return; // 不阻止事件，让TimeInput正常获得焦点
+            //}
+
+            // 如果点击的是其他区域（比如下拉箭头），则打开时间选择弹框
             // 保存当前时间到临时变量
             tempDateTime = SelectedDateTime ?? DateTime.Now;
 
@@ -379,15 +498,17 @@ namespace WpfDateTimePicker.Controls
                 UpdateTimeSelection();
             }
 
-            e.Handled = true; // 防止事件冒泡
+            // 阻止事件冒泡
+            //e.Handled = true;
         }
+
 
         private void HourListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (HourListBox.SelectedIndex >= 0)
             {
                 tempDateTime = new DateTime(tempDateTime.Year, tempDateTime.Month, tempDateTime.Day,
-                    HourListBox.SelectedIndex, tempDateTime.Minute, tempDateTime.Second);
+                    HourListBox.SelectedIndex, tempDateTime.Minute, 0);
             }
         }
 
@@ -396,16 +517,7 @@ namespace WpfDateTimePicker.Controls
             if (MinuteListBox.SelectedIndex >= 0)
             {
                 tempDateTime = new DateTime(tempDateTime.Year, tempDateTime.Month, tempDateTime.Day,
-                    tempDateTime.Hour, MinuteListBox.SelectedIndex, tempDateTime.Second);
-            }
-        }
-
-        private void SecondListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (SecondListBox.SelectedIndex >= 0)
-            {
-                tempDateTime = new DateTime(tempDateTime.Year, tempDateTime.Month, tempDateTime.Day,
-                    tempDateTime.Hour, tempDateTime.Minute, SecondListBox.SelectedIndex);
+                    tempDateTime.Hour, MinuteListBox.SelectedIndex, 0);
             }
         }
 
@@ -535,7 +647,7 @@ namespace WpfDateTimePicker.Controls
             // 保持原有的时间部分
             var currentTime = SelectedDateTime ?? DateTime.Now;
             var newDateTime = new DateTime(selectedDate.Year, selectedDate.Month, selectedDate.Day,
-                currentTime.Hour, currentTime.Minute, currentTime.Second);
+                currentTime.Hour, currentTime.Minute, 0);
 
             // 检查完整的日期时间是否在范围内
             if (!IsDateTimeInRange(newDateTime))
@@ -587,7 +699,7 @@ namespace WpfDateTimePicker.Controls
             {
                 var currentTime = SelectedDateTime ?? DateTime.Now;
                 SelectedDateTime = new DateTime(date.Year, date.Month, date.Day,
-                    currentTime.Hour, currentTime.Minute, currentTime.Second);
+                    currentTime.Hour, currentTime.Minute, 0);
                 CurrentMonth = date;
                 GenerateCalendar();
             }
@@ -620,7 +732,7 @@ namespace WpfDateTimePicker.Controls
         private void Now_Click(object sender, RoutedEventArgs e)
         {
             var now = DateTime.Now;
-            
+
             // 检查当前时间是否在范围内
             if (!IsDateTimeInRange(now))
             {
@@ -631,6 +743,8 @@ namespace WpfDateTimePicker.Controls
             SelectedDateTime = now;
             CurrentMonth = now;
             GenerateCalendar();
+
+            DateConfirm_Click(sender, e);//执行确认
         }
 
         private void DateConfirm_Click(object sender, RoutedEventArgs e)
@@ -640,7 +754,7 @@ namespace WpfDateTimePicker.Controls
             {
                 var currentTime = SelectedDateTime ?? DateTime.Now;
                 SelectedDateTime = new DateTime(date.Year, date.Month, date.Day,
-                    currentTime.Hour, currentTime.Minute, currentTime.Second);
+                    currentTime.Hour, currentTime.Minute, 0);
             }
 
             // 只有点击确定按钮才关闭日期弹框
@@ -661,26 +775,30 @@ namespace WpfDateTimePicker.Controls
             }
 
             // 尝试解析输入的日期时间
-            if (!DateTime.TryParseExact(inputText, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime parsedDateTime))
+            if (!DateTime.TryParseExact(inputText, "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime parsedDateTime))
             {
                 // 解析失败，恢复到原来的有效值
                 if (SelectedDateTime.HasValue)
                 {
-                    textBox.Text = SelectedDateTime.Value.ToString("yyyy-MM-dd HH:mm:ss");
+                    textBox.Text = SelectedDateTime.Value.ToString("yyyy-MM-dd HH:mm");
                 }
                 else
                 {
-                    textBox.Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                    textBox.Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
                 }
             }
             else
             {
+                // 确保秒数为0
+                parsedDateTime = new DateTime(parsedDateTime.Year, parsedDateTime.Month, parsedDateTime.Day,
+                    parsedDateTime.Hour, parsedDateTime.Minute, 0);
+
                 // 检查是否在范围内
                 if (!IsDateTimeInRange(parsedDateTime))
                 {
                     // 如果超出范围，调整到边界值
                     parsedDateTime = ClampDateTime(parsedDateTime);
-                    textBox.Text = parsedDateTime.ToString("yyyy-MM-dd HH:mm:ss");
+                    textBox.Text = parsedDateTime.ToString("yyyy-MM-dd HH:mm");
                 }
 
                 // 更新SelectedDateTime
@@ -728,7 +846,7 @@ namespace WpfDateTimePicker.Controls
                 // 解析成功，更新SelectedDateTime（保持原有时间部分）
                 var currentTime = SelectedDateTime ?? DateTime.Now;
                 var newDateTime = new DateTime(parsedDate.Year, parsedDate.Month, parsedDate.Day,
-                    currentTime.Hour, currentTime.Minute, currentTime.Second);
+                    currentTime.Hour, currentTime.Minute, 0);
 
                 // 检查完整的日期时间是否在范围内
                 if (!IsDateTimeInRange(newDateTime))
@@ -752,16 +870,16 @@ namespace WpfDateTimePicker.Controls
             }
 
             // 尝试解析输入的时间
-            if (!DateTime.TryParseExact(inputText, "HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime parsedTime))
+            if (!DateTime.TryParseExact(inputText, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime parsedTime))
             {
                 // 解析失败，恢复到原来的有效值
                 if (SelectedDateTime.HasValue)
                 {
-                    textBox.Text = SelectedDateTime.Value.ToString("HH:mm:ss");
+                    textBox.Text = SelectedDateTime.Value.ToString("HH:mm");
                 }
                 else
                 {
-                    textBox.Text = DateTime.Now.ToString("HH:mm:ss");
+                    textBox.Text = DateTime.Now.ToString("HH:mm");
                 }
             }
             else
@@ -769,17 +887,91 @@ namespace WpfDateTimePicker.Controls
                 // 解析成功，更新SelectedDateTime（保持原有日期部分）
                 var currentDate = SelectedDateTime ?? DateTime.Now;
                 var newDateTime = new DateTime(currentDate.Year, currentDate.Month, currentDate.Day,
-                    parsedTime.Hour, parsedTime.Minute, parsedTime.Second);
+                    parsedTime.Hour, parsedTime.Minute, 0);
 
                 // 检查完整的日期时间是否在范围内
                 if (!IsDateTimeInRange(newDateTime))
                 {
                     // 如果超出范围，调整到边界值
                     newDateTime = ClampDateTime(newDateTime);
-                    textBox.Text = newDateTime.ToString("HH:mm:ss");
+                    textBox.Text = newDateTime.ToString("HH:mm");
                 }
 
                 SelectedDateTime = newDateTime;
+            }
+        }
+
+        #endregion
+
+
+        #region 回车事件处理方法
+        private void DisplayText_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter)
+            {
+                // 执行确定按钮的逻辑
+                DateConfirm_Click(sender, e);
+                e.Handled = true; // 阻止事件继续传播
+                Keyboard.ClearFocus(); // 清除焦点
+            }
+        }
+
+        private void DateInput_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter)
+            {
+                // 执行确定按钮的逻辑
+                DateConfirm_Click(sender, e);
+                e.Handled = true; // 阻止事件继续传播
+                Keyboard.ClearFocus(); // 清除焦点
+
+            }
+        }
+
+        private void TimeInput_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter)
+            {
+                var inputText = TimeInput.Text.Trim();
+                // 如果输入为空，保持当前值
+                if (!string.IsNullOrEmpty(inputText))
+                {
+                    // 尝试解析输入的时间
+                    if (DateTime.TryParseExact(inputText, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime parsedTime))
+                    {
+                        // 解析成功，直接更新SelectedDateTime（保持原有日期部分）
+                        var currentDate = SelectedDateTime ?? DateTime.Now;
+                        var newDateTime = new DateTime(currentDate.Year, currentDate.Month, currentDate.Day,
+                            parsedTime.Hour, parsedTime.Minute, 0);
+
+                        // 检查完整的日期时间是否在范围内
+                        if (!IsDateTimeInRange(newDateTime))
+                        {
+                            // 如果超出范围，调整到边界值
+                            newDateTime = ClampDateTime(newDateTime);
+                            TimeInput.Text = newDateTime.ToString("HH:mm");
+                        }
+
+                        // 直接更新SelectedDateTime
+                        tempDateTime = newDateTime;
+                    }
+                    else
+                    {
+                        // 解析失败，恢复到原来的有效值
+                        if (SelectedDateTime.HasValue)
+                        {
+                            TimeInput.Text = SelectedDateTime.Value.ToString("HH:mm");
+                        }
+                        else
+                        {
+                            TimeInput.Text = DateTime.Now.ToString("HH:mm");
+                        }
+                    }
+                }
+
+                e.Handled = true; // 阻止事件继续传播
+                Keyboard.ClearFocus(); // 清除焦点
+                TimeConfirm_Click(null, null);
             }
         }
 
