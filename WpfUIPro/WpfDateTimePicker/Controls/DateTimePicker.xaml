@@ -106,6 +106,9 @@
             <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
             <Setter Property="ItemContainerStyle" Value="{StaticResource TimeListItemStyle}"/>
         </Style>
+        
+        <!-- 添加日期时间显示转换器 -->
+        <local:DateTimeDisplayConverter x:Key="DateTimeDisplayConverter"/>
     </UserControl.Resources>
 
     <Grid>
@@ -118,13 +121,19 @@
                 </Grid.ColumnDefinitions>
 
                 <TextBox x:Name="DisplayText"  Style="{x:Null}" 
-                          Text="{Binding SelectedDateTime, RelativeSource={RelativeSource AncestorType=UserControl}, StringFormat='yyyy-MM-dd HH:mm'}"
                           VerticalAlignment="Center"
                           Foreground="#606266"
                           BorderThickness="0"
                           Background="Transparent"
                           FontSize="14"
-                          KeyDown="DisplayText_KeyDown" />
+                          KeyDown="DisplayText_KeyDown">
+                    <TextBox.Text>
+                        <MultiBinding Converter="{StaticResource DateTimeDisplayConverter}">
+                            <Binding Path="SelectedDateTime" RelativeSource="{RelativeSource AncestorType=UserControl}"/>
+                            <Binding Path="TimeVisibility" RelativeSource="{RelativeSource AncestorType=UserControl}"/>
+                        </MultiBinding>
+                    </TextBox.Text>
+                </TextBox>
 
                 <Path Grid.Column="1" 
                       Data="M7 10l5 5 5-5z" 
@@ -175,7 +184,8 @@
                                Style="{StaticResource DateTimePickerStyle}"
                                Margin="6,0,0,0"
                                Height="32"
-                               Cursor="Hand"                               
+                               Cursor="Hand"
+                               Visibility="{Binding TimeVisibility, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                PreviewMouseLeftButtonDown="TimeInputBorder_PreviewMouseLeftButtonDown">
                             <Grid Margin="8,0">
                                 <Grid.ColumnDefinitions>
@@ -298,7 +308,8 @@
                PlacementTarget="{Binding ElementName=TimeInputBorder}"
                Placement="Bottom"
                StaysOpen="True"
-               AllowsTransparency="True">
+               AllowsTransparency="True"
+               Visibility="{Binding TimeVisibility, RelativeSource={RelativeSource AncestorType=UserControl}}">
             <Border Background="White" 
                     BorderBrush="#E4E7ED" 
                     BorderThickness="1"
